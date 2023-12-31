@@ -22,31 +22,31 @@ class YOLOv1(nn.Module):
                  deploy=False,
                  nms_class_agnostic :bool = False):
         super(YOLOv1, self).__init__()
-        # ------------------------- 基础参数 ---------------------------
-        self.cfg = cfg                                 # 模型配置文件
-        self.img_size = img_size                       # 输入图像大小
-        self.device = device                           # cuda或者是cpu
-        self.num_classes = num_classes                 # 类别的数量
-        self.trainable = trainable                     # 训练的标记
-        self.conf_thresh = conf_thresh                 # 得分阈值
-        self.nms_thresh = nms_thresh                   # NMS阈值
-        self.stride = 32                               # 网络的最大步长
-        self.deploy = deploy
+        # ------------------------- Basic parameters  ---------------------------
+        self.cfg                = cfg                  # Model configuration file
+        self.img_size           = img_size             # Enter image size
+        self.device             = device               # cuda or cpu
+        self.num_classes        = num_classes          # number of classes
+        self.trainable          = trainable            # training mark
+        self.conf_thresh        = conf_thresh          # score threshold
+        self.nms_thresh         = nms_thresh           # NMS threshold
+        self.stride             = 32                   # The maximum stride size of the network
+        self.deploy             = deploy
         self.nms_class_agnostic = nms_class_agnostic
         
-        # ----------------------- 模型网络结构 -------------------------
-        ## 主干网络
+        # ----------------------- Model network structure -----------------------
+        ## backbone network
         self.backbone, feat_dim = build_backbone(
             cfg['backbone'], trainable&cfg['pretrained'])
 
-        ## 颈部网络
+        ## neck network
         self.neck = build_neck(cfg, feat_dim, out_dim=512)
-        head_dim = self.neck.out_dim
+        head_dim  = self.neck.out_dim
 
-        ## 检测头
+        ## Detection head
         self.head = build_head(cfg, head_dim, head_dim, num_classes)
 
-        ## 预测层
+        ## prediction layer
         self.obj_pred = nn.Conv2d(head_dim, 1, kernel_size=1)
         self.cls_pred = nn.Conv2d(head_dim, num_classes, kernel_size=1)
         self.reg_pred = nn.Conv2d(head_dim, 4, kernel_size=1)
@@ -54,15 +54,15 @@ class YOLOv1(nn.Module):
 
     def create_grid(self, fmp_size):
         """ 
-            用于生成G矩阵，其中每个元素都是特征图上的像素坐标。
+            Used to generate a G matrix, where each element is a pixel coordinate on the feature map.
         """
-        # 特征图的宽和高
+        # The width and height of the feature map
         ws, hs = fmp_size
 
-        # 生成网格的x坐标和y坐标
+        # Generate the x and y coordinates of the grid
         grid_y, grid_x = torch.meshgrid([torch.arange(hs), torch.arange(ws)])
 
-        # 将xy两部分的坐标拼起来：[H, W, 2]
+        # Put together the coordinates of the two parts xy：[H, W, 2]
         grid_xy = torch.stack([grid_x, grid_y], dim=-1).float()
 
         # [H, W, 2] -> [HW, 2] -> [HW, 2]
@@ -73,16 +73,16 @@ class YOLOv1(nn.Module):
 
     def decode_boxes(self, pred, fmp_size):
         """
-            将txtytwth转换为常用的x1y1x2y2形式。
+            Convert txtytwth to the commonly used x1y1x2y2 form。
         """
-        # 生成网格坐标矩阵
+        # Generate grid coordinate matrix
         grid_cell = self.create_grid(fmp_size)
 
-        # 计算预测边界框的中心点坐标和宽高
+        # Calculate the center point coordinates, width and height of the predicted bounding box
         pred_ctr = (torch.sigmoid(pred[..., :2]) + grid_cell) * self.stride
         pred_wh = torch.exp(pred[..., 2:]) * self.stride
 
-        # 将所有bbox的中心带你坐标和宽高换算成x1y1x2y2形式
+        # Convert the center coordinates, width and height of all bboxes into x1y1x2y2 form
         pred_x1y1 = pred_ctr - pred_wh * 0.5
         pred_x2y2 = pred_ctr + pred_wh * 0.5
         pred_box = torch.cat([pred_x1y1, pred_x2y2], dim=-1)
@@ -119,13 +119,13 @@ class YOLOv1(nn.Module):
 
     @torch.no_grad()
     def inference(self, x):
-        # 主干网络
+        # Backbone network
         feat = self.backbone(x)
 
-        # 颈部网络
+        # Neck network
         feat = self.neck(feat)
 
-        # 检测头
+        # Detection head
         cls_feat, reg_feat = self.head(feat)
 
         # 预测层
@@ -134,22 +134,22 @@ class YOLOv1(nn.Module):
         reg_pred = self.reg_pred(reg_feat)
         fmp_size = obj_pred.shape[-2:]
 
-        # 对 pred 的size做一些view调整，便于后续的处理
+        # Make some view adjustments to the size of pred to facilitate subsequent processing.
         # [B, C, H, W] -> [B, H, W, C] -> [B, H*W, C]
         obj_pred = obj_pred.permute(0, 2, 3, 1).contiguous().flatten(1, 2)
         cls_pred = cls_pred.permute(0, 2, 3, 1).contiguous().flatten(1, 2)
         reg_pred = reg_pred.permute(0, 2, 3, 1).contiguous().flatten(1, 2)
 
-        # 测试时，笔者默认batch是1，
-        # 因此，我们不需要用batch这个维度，用[0]将其取走。
+        # When testing, the author defaults to batch 1。
+        # Therefore, we do not need to use the batch dimension and use [0] to remove it。
         obj_pred = obj_pred[0]       # [H*W, 1]
         cls_pred = cls_pred[0]       # [H*W, NC]
         reg_pred = reg_pred[0]       # [H*W, 4]
 
-        # 每个边界框的得分
+        # Score for each bounding box
         scores = torch.sqrt(obj_pred.sigmoid() * cls_pred.sigmoid())
         
-        # 解算边界框, 并归一化边界框: [H*W, 4]
+        # Solve the bounding box and normalize the bounding box: [H*W, 4]
         bboxes = self.decode_boxes(reg_pred, fmp_size)
         
         if self.deploy:
@@ -158,11 +158,11 @@ class YOLOv1(nn.Module):
 
             return outputs
         else:
-            # 将预测放在cpu处理上，以便进行后处理
+            # Put predictions on cpu processing for post-processing
             scores = scores.cpu().numpy()
             bboxes = bboxes.cpu().numpy()
             
-            # 后处理
+            # Post-processing
             bboxes, scores, labels = self.postprocess(bboxes, scores)
 
         return bboxes, scores, labels
@@ -172,31 +172,31 @@ class YOLOv1(nn.Module):
         if not self.trainable:
             return self.inference(x)
         else:
-            # 主干网络
+            # Backbone network
             feat = self.backbone(x)
 
-            # 颈部网络
+            # Neck network
             feat = self.neck(feat)
 
-            # 检测头
+            # Detection head
             cls_feat, reg_feat = self.head(feat)
 
-            # 预测层
+            # Prediction layer
             obj_pred = self.obj_pred(cls_feat)
             cls_pred = self.cls_pred(cls_feat)
             reg_pred = self.reg_pred(reg_feat)
             fmp_size = obj_pred.shape[-2:]
 
-            # 对 pred 的size做一些view调整，便于后续的处理
+            # Make some view adjustments to the size of pred to facilitate subsequent processing.
             # [B, C, H, W] -> [B, H, W, C] -> [B, H*W, C]
             obj_pred = obj_pred.permute(0, 2, 3, 1).contiguous().flatten(1, 2)
             cls_pred = cls_pred.permute(0, 2, 3, 1).contiguous().flatten(1, 2)
             reg_pred = reg_pred.permute(0, 2, 3, 1).contiguous().flatten(1, 2)
 
-            # decode bbox
+            # Decode bbox
             box_pred = self.decode_boxes(reg_pred, fmp_size)
 
-            # 网络输出
+            # Network output
             outputs = {"pred_obj": obj_pred,                  # (Tensor) [B, M, 1]
                        "pred_cls": cls_pred,                   # (Tensor) [B, M, C]
                        "pred_box": box_pred,                   # (Tensor) [B, M, 4]
