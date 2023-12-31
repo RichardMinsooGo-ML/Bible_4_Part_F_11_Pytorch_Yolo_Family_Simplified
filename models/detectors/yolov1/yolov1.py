@@ -128,7 +128,7 @@ class YOLOv1(nn.Module):
         # Detection head
         cls_feat, reg_feat = self.head(feat)
 
-        # 预测层
+        # Prediction layer
         obj_pred = self.obj_pred(cls_feat)
         cls_pred = self.cls_pred(cls_feat)
         reg_pred = self.reg_pred(reg_feat)
@@ -197,7 +197,7 @@ class YOLOv1(nn.Module):
             box_pred = self.decode_boxes(reg_pred, fmp_size)
 
             # Network output
-            outputs = {"pred_obj": obj_pred,                  # (Tensor) [B, M, 1]
+            outputs = {"pred_obj": obj_pred,                   # (Tensor) [B, M, 1]
                        "pred_cls": cls_pred,                   # (Tensor) [B, M, C]
                        "pred_box": box_pred,                   # (Tensor) [B, M, 4]
                        "stride": self.stride,                  # (Int)
