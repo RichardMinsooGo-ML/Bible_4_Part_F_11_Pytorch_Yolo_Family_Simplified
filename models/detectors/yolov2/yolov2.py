@@ -1,9 +1,12 @@
+# --------------- Torch components ---------------
 import torch
 import torch.nn as nn
 import numpy as np
 
+# --------------- External components ---------------
 from utils.misc import multiclass_nms
 
+# --------------- Model components ---------------
 from .yolov2_backbone import build_backbone
 from .yolov2_neck import build_neck
 from .yolov2_head import build_head
@@ -14,13 +17,13 @@ class YOLOv2(nn.Module):
     def __init__(self,
                  cfg,
                  device,
-                 num_classes=20,
-                 conf_thresh=0.01,
-                 nms_thresh=0.5,
-                 topk=100,
-                 trainable=False,
-                 deploy=False,
-                 nms_class_agnostic=False):
+                 num_classes = 20,
+                 conf_thresh = 0.01,
+                 nms_thresh  = 0.5,
+                 topk        = 100,
+                 trainable   = False,
+                 deploy      = False,
+                 nms_class_agnostic = False):
         super(YOLOv2, self).__init__()
         # ------------------------- Basic parameters  ---------------------------
         self.cfg                = cfg                  # Model configuration file
@@ -38,7 +41,7 @@ class YOLOv2(nn.Module):
         self.num_anchors = self.anchor_size.shape[0]
         
         # ----------------------- Model network structure -----------------------
-        ## backbone network
+        ## Backbone network
         self.backbone, feat_dim = build_backbone(
             cfg['backbone'], trainable&cfg['pretrained'])
 
@@ -49,7 +52,7 @@ class YOLOv2(nn.Module):
         ## Detection head
         self.head = build_head(cfg, head_dim, head_dim, num_classes)
 
-        ## prediction layer
+        ## Prediction layer
         self.obj_pred = nn.Conv2d(head_dim, 1*self.num_anchors, kernel_size=1)
         self.cls_pred = nn.Conv2d(head_dim, num_classes*self.num_anchors, kernel_size=1)
         self.reg_pred = nn.Conv2d(head_dim, 4*self.num_anchors, kernel_size=1)
@@ -150,6 +153,7 @@ class YOLOv2(nn.Module):
         return bboxes, scores, labels
 
 
+    # ---------------------- Main Process for Inference ----------------------
     @torch.no_grad()
     def inference(self, x):
         bs = x.shape[0]
@@ -191,13 +195,14 @@ class YOLOv2(nn.Module):
 
             return outputs
         else:
-            # post process
+            # Post-processing
             bboxes, scores, labels = self.postprocess(
                 obj_pred, cls_pred, reg_pred, anchors)
-
+            
             return bboxes, scores, labels
 
 
+    # ---------------------- Main Process for Training ----------------------
     def forward(self, x):
         if not self.trainable:
             return self.inference(x)
@@ -230,12 +235,13 @@ class YOLOv2(nn.Module):
             # Decode bbox
             box_pred = self.decode_boxes(anchors, reg_pred)
 
+            
             # Network output
             outputs = {"pred_obj": obj_pred,                   # (Tensor) [B, M, 1]
                        "pred_cls": cls_pred,                   # (Tensor) [B, M, C]
                        "pred_box": box_pred,                   # (Tensor) [B, M, 4]
                        "stride": self.stride,                  # (Int)
                        "fmp_size": fmp_size                    # (List) [fmp_h, fmp_w]
-                       }           
+                       }
             return outputs
         
