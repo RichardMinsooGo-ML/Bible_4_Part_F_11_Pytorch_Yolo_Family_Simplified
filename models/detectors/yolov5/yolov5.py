@@ -1,17 +1,18 @@
 import torch
 import torch.nn as nn
 
+from utils.misc import multiclass_nms
+
 from .yolov5_backbone import build_backbone
 from .yolov5_pafpn import build_fpn
 from .yolov5_head import build_head
 
-from utils.misc import multiclass_nms
 
-
+# YOLOv5
 class YOLOv5(nn.Module):
-    def __init__(self, 
+    def __init__(self,
                  cfg,
-                 device, 
+                 device,
                  num_classes = 20,
                  conf_thresh = 0.01,
                  nms_thresh  = 0.5,
@@ -20,18 +21,17 @@ class YOLOv5(nn.Module):
                  deploy      = False,
                  nms_class_agnostic = False):
         super(YOLOv5, self).__init__()
-        # ---------------------- Basic Parameters ----------------------
-        self.cfg = cfg
-        self.device = device
-        self.stride = cfg['stride']
-        self.num_classes = num_classes
-        self.trainable = trainable
-        self.conf_thresh = conf_thresh
-        self.nms_thresh = nms_thresh
-        self.topk = topk
-        self.deploy = deploy
+        # ------------------------- Basic parameters  ---------------------------
+        self.cfg                = cfg                  # Model configuration file
+        self.device             = device               # cuda or cpu
+        self.stride             = cfg['stride']
+        self.num_classes        = num_classes          # number of classes
+        self.trainable          = trainable            # training mark
+        self.conf_thresh        = conf_thresh          # score threshold
+        self.nms_thresh         = nms_thresh           # NMS threshold
+        self.topk               = topk                 # topk
+        self.deploy             = deploy
         self.nms_class_agnostic = nms_class_agnostic
-        
         # ------------------- Anchor box -------------------
         self.num_levels = 3
         self.num_anchors = len(cfg['anchor_size']) // self.num_levels
@@ -39,21 +39,21 @@ class YOLOv5(nn.Module):
             cfg['anchor_size']
             ).float().view(self.num_levels, self.num_anchors, 2) # [S, A, 2]
         
-        # ------------------- Network Structure -------------------
-        ## Backbone
+        # ----------------------- Model network structure -----------------------
+        ## Backbone network
         self.backbone, feats_dim = build_backbone(cfg)
         
         ## FPN
         self.fpn = build_fpn(cfg=cfg, in_dims=feats_dim, out_dim=round(256*cfg['width']))
         self.head_dim = self.fpn.out_dim
 
-        ## Head
+        ## Detection head
         self.non_shared_heads = nn.ModuleList(
             [build_head(cfg, head_dim, head_dim, num_classes) 
             for head_dim in self.head_dim
             ])
 
-        ## Pred
+        ## Prediction layer
         self.obj_preds = nn.ModuleList(
                             [nn.Conv2d(head.reg_out_dim, 1 * self.num_anchors, kernel_size=1) 
                                 for head in self.non_shared_heads
@@ -66,7 +66,7 @@ class YOLOv5(nn.Module):
                             [nn.Conv2d(head.reg_out_dim, 4 * self.num_anchors, kernel_size=1) 
                                 for head in self.non_shared_heads
                               ])                 
-
+    
 
     # ---------------------- Basic Functions ----------------------
     ## generate anchor points
@@ -148,7 +148,7 @@ class YOLOv5(nn.Module):
     # ---------------------- Main Process for Inference ----------------------
     @torch.no_grad()
     def inference_single_image(self, x):
-        # backbone
+        # Backbone network
         pyramid_feats = self.backbone(x)
 
         # fpn
@@ -199,10 +199,10 @@ class YOLOv5(nn.Module):
 
             return outputs
         else:
-            # post process
+            # Post-processing
             bboxes, scores, labels = self.post_process(
                 all_obj_preds, all_cls_preds, all_box_preds)
-        
+            
             return bboxes, scores, labels
 
 
@@ -211,7 +211,7 @@ class YOLOv5(nn.Module):
         if not self.trainable:
             return self.inference_single_image(x)
         else:
-            # backbone
+            # Backbone network
             pyramid_feats = self.backbone(x)
 
             # fpn
@@ -251,13 +251,12 @@ class YOLOv5(nn.Module):
                 all_cls_preds.append(cls_pred)
                 all_box_preds.append(box_pred)
                 all_fmp_sizes.append(fmp_size)
-            
-            # output dict
+
+            # Network output
             outputs = {"pred_obj": all_obj_preds,        # List [B, M, 1]
                        "pred_cls": all_cls_preds,        # List [B, M, C]
                        "pred_box": all_box_preds,        # List [B, M, 4]
                        'fmp_sizes': all_fmp_sizes,       # List
                        'strides': self.stride,           # List
                        }
-
-            return outputs 
+            return outputs
