@@ -1,9 +1,12 @@
+# --------------- Torch components ---------------
 import torch
 import torch.nn as nn
 import numpy as np
 
+# --------------- External components ---------------
 from utils.misc import multiclass_nms
 
+# --------------- Model components ---------------
 from .yolov1_backbone import build_backbone
 from .yolov1_neck import build_neck
 from .yolov1_head import build_head
@@ -14,12 +17,12 @@ class YOLOv1(nn.Module):
     def __init__(self,
                  cfg,
                  device,
-                 img_size=None,
-                 num_classes=20,
-                 conf_thresh=0.01,
-                 nms_thresh=0.5,
-                 trainable=False,
-                 deploy=False,
+                 img_size    = None,
+                 num_classes = 20,
+                 conf_thresh = 0.01,
+                 nms_thresh  = 0.5,
+                 trainable   = False,
+                 deploy      = False,
                  nms_class_agnostic :bool = False):
         super(YOLOv1, self).__init__()
         # ------------------------- Basic parameters  ---------------------------
@@ -35,7 +38,7 @@ class YOLOv1(nn.Module):
         self.nms_class_agnostic = nms_class_agnostic
         
         # ----------------------- Model network structure -----------------------
-        ## backbone network
+        ## Backbone network
         self.backbone, feat_dim = build_backbone(
             cfg['backbone'], trainable&cfg['pretrained'])
 
@@ -46,7 +49,7 @@ class YOLOv1(nn.Module):
         ## Detection head
         self.head = build_head(cfg, head_dim, head_dim, num_classes)
 
-        ## prediction layer
+        ## Prediction layer
         self.obj_pred = nn.Conv2d(head_dim, 1, kernel_size=1)
         self.cls_pred = nn.Conv2d(head_dim, num_classes, kernel_size=1)
         self.reg_pred = nn.Conv2d(head_dim, 4, kernel_size=1)
@@ -117,6 +120,7 @@ class YOLOv1(nn.Module):
         return bboxes, scores, labels
 
 
+    # ---------------------- Main Process for Inference ----------------------
     @torch.no_grad()
     def inference(self, x):
         # Backbone network
@@ -168,6 +172,7 @@ class YOLOv1(nn.Module):
         return bboxes, scores, labels
 
 
+    # ---------------------- Main Process for Training ----------------------
     def forward(self, x):
         if not self.trainable:
             return self.inference(x)
@@ -196,12 +201,13 @@ class YOLOv1(nn.Module):
             # Decode bbox
             box_pred = self.decode_boxes(reg_pred, fmp_size)
 
+            
             # Network output
             outputs = {"pred_obj": obj_pred,                   # (Tensor) [B, M, 1]
                        "pred_cls": cls_pred,                   # (Tensor) [B, M, C]
                        "pred_box": box_pred,                   # (Tensor) [B, M, 4]
                        "stride": self.stride,                  # (Int)
                        "fmp_size": fmp_size                    # (List) [fmp_h, fmp_w]
-                       }           
+                       }
             return outputs
         
