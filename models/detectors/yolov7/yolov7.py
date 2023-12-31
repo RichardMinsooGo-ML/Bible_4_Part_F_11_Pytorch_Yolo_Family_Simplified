@@ -14,44 +14,44 @@ class YOLOv7(nn.Module):
     def __init__(self,
                  cfg,
                  device,
-                 num_classes=20,
-                 conf_thresh=0.01,
-                 topk=100,
-                 nms_thresh=0.5,
-                 trainable=False,
-                 deploy = False,
+                 num_classes = 20,
+                 conf_thresh = 0.01,
+                 topk        = 100,
+                 nms_thresh  = 0.5,
+                 trainable   = False,
+                 deploy      = False,
                  nms_class_agnostic = False):
         super(YOLOv7, self).__init__()
-        # ------------------- Basic parameters -------------------
-        self.cfg = cfg                                 # 模型配置文件
-        self.device = device                           # cuda或者是cpu
-        self.num_classes = num_classes                 # 类别的数量
-        self.trainable = trainable                     # 训练的标记
-        self.conf_thresh = conf_thresh                 # 得分阈值
-        self.nms_thresh = nms_thresh                   # NMS阈值
-        self.topk = topk                               # topk
-        self.stride = [8, 16, 32]                      # 网络的输出步长        
-        self.deploy = deploy
+        # ------------------------- Basic parameters  ---------------------------
+        self.cfg                = cfg                  # Model configuration file
+        self.device             = device               # cuda or cpu
+        self.num_classes        = num_classes          # number of classes
+        self.trainable          = trainable            # training mark
+        self.conf_thresh        = conf_thresh          # score threshold
+        self.nms_thresh         = nms_thresh           # NMS threshold
+        self.topk               = topk                 # topk
+        self.stride             = [8, 16, 32]          # The output step size of the network
+        self.deploy             = deploy
         self.nms_class_agnostic = nms_class_agnostic
         # ------------------- Network Structure -------------------
-        ## 主干网络
+        ## Backbone network
         self.backbone, feats_dim = build_backbone(cfg, trainable&cfg['pretrained'])
 
-        ## 颈部网络: SPP模块
+        ## Neck network: SPP module
         self.neck = build_neck(cfg, in_dim=feats_dim[-1], out_dim=feats_dim[-1]//2)
         feats_dim[-1] = self.neck.out_dim
 
-        ## 颈部网络: 特征金字塔
+        ## Neck Network: Feature Pyramid
         self.fpn = build_fpn(cfg=cfg, in_dims=feats_dim, out_dim=round(256*cfg['channel_width']))
         self.head_dim = self.fpn.out_dim
 
-        ## 检测头
+        ## Detection head
         self.non_shared_heads = nn.ModuleList(
             [build_head(cfg, head_dim, head_dim, num_classes) 
             for head_dim in self.head_dim
             ])
 
-        ## 预测层
+        ## Prediction layer
         self.obj_preds = nn.ModuleList(
                             [nn.Conv2d(head.reg_out_dim, 1, kernel_size=1) 
                                 for head in self.non_shared_heads
@@ -64,7 +64,7 @@ class YOLOv7(nn.Module):
                             [nn.Conv2d(head.reg_out_dim, 4, kernel_size=1) 
                                 for head in self.non_shared_heads
                               ])                 
-
+    
 
     # ---------------------- Basic Functions ----------------------
     ## generate anchor points
@@ -141,20 +141,20 @@ class YOLOv7(nn.Module):
     # ---------------------- Main Process for Inference ----------------------
     @torch.no_grad()
     def inference_single_image(self, x):
-        # 主干网络
+        # Backbone network
         pyramid_feats = self.backbone(x)
 
-        # 颈部网络
+        # Neck network
         pyramid_feats[-1] = self.neck(pyramid_feats[-1])
 
-        # 特征金字塔
+        # Feature pyramid
         pyramid_feats = self.fpn(pyramid_feats)
 
-        # 检测头
+        # Detection head
+        all_anchors = []
         all_obj_preds = []
         all_cls_preds = []
         all_box_preds = []
-        all_anchors = []
         for level, (feat, head) in enumerate(zip(pyramid_feats, self.non_shared_heads)):
             cls_feat, reg_feat = head(feat)
 
@@ -195,10 +195,10 @@ class YOLOv7(nn.Module):
 
             return outputs
         else:
-            # post process
+            # Post-processing
             bboxes, scores, labels = self.post_process(
                 all_obj_preds, all_cls_preds, all_box_preds)
-        
+            
             return bboxes, scores, labels
 
 
@@ -207,17 +207,16 @@ class YOLOv7(nn.Module):
         if not self.trainable:
             return self.inference_single_image(x)
         else:
-            # 主干网络
+            # Backbone network
             pyramid_feats = self.backbone(x)
 
-            # 颈部网络
+            # Neck network
             pyramid_feats[-1] = self.neck(pyramid_feats[-1])
 
-            # 特征金字塔
+            # Feature pyramid
             pyramid_feats = self.fpn(pyramid_feats)
 
-            # 检测头
-            all_anchors = []
+            # Detection head
             all_strides = []
             all_obj_preds = []
             all_cls_preds = []
@@ -244,7 +243,7 @@ class YOLOv7(nn.Module):
                 cls_pred = cls_pred.permute(0, 2, 3, 1).contiguous().view(B, -1, self.num_classes)
                 reg_pred = reg_pred.permute(0, 2, 3, 1).contiguous().view(B, -1, 4)
 
-                # decode bbox
+                # Decode bbox
                 ctr_pred = reg_pred[..., :2] * self.stride[level] + anchors[..., :2]
                 wh_pred = torch.exp(reg_pred[..., 2:]) * self.stride[level]
                 pred_x1y1 = ctr_pred - wh_pred * 0.5
@@ -257,8 +256,8 @@ class YOLOv7(nn.Module):
                 all_reg_preds.append(reg_pred)
                 all_anchors.append(anchors)
                 all_strides.append(stride_tensor)
-            
-            # output dict
+
+            # Network output
             outputs = {"pred_obj": all_obj_preds,        # List(Tensor) [B, M, 1]
                        "pred_cls": all_cls_preds,        # List(Tensor) [B, M, C]
                        "pred_box": all_box_preds,        # List(Tensor) [B, M, 4]
@@ -267,5 +266,4 @@ class YOLOv7(nn.Module):
                        "strides": self.stride,           # List(Int) [8, 16, 32]
                        "stride_tensors": all_strides     # List(Tensor) [M, 1]
                        }
-
-            return outputs 
+            return outputs
