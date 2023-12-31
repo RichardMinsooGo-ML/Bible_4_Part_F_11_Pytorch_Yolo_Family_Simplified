@@ -29,28 +29,27 @@ class YOLOv8(nn.Module):
         # ------------------------- Basic parameters  ---------------------------
         self.cfg                = cfg                  # Model configuration file
         self.device             = device               # cuda or cpu
-        self.strides            = cfg['stride']
         self.reg_max            = cfg['reg_max']
         self.num_classes        = num_classes          # number of classes
         self.trainable          = trainable            # training mark
         self.conf_thresh        = conf_thresh          # score threshold
         self.nms_thresh         = nms_thresh           # NMS threshold
         self.num_levels         = len(self.strides)
-        self.num_classes        = num_classes
         self.topk               = topk                 # topk
+        self.strides            = cfg['stride']
         self.deploy             = deploy
         self.nms_class_agnostic = nms_class_agnostic
         
         # ----------------------- Model network structure -----------------------
         ## Backbone network
-        self.backbone, feat_dims = build_backbone(cfg)
+        self.backbone, feats_dim = build_backbone(cfg)
 
         ## Neck network: SPP module
-        self.neck = build_neck(cfg, feat_dims[-1], feat_dims[-1])
-        feat_dims[-1] = self.neck.out_dim
+        self.neck = build_neck(cfg, feats_dim[-1], feats_dim[-1])
+        feats_dim[-1] = self.neck.out_dim
         
         ## Neck Network: Feature Pyramid
-        self.fpn = build_fpn(cfg, feat_dims)
+        self.fpn = build_fpn(cfg, feats_dim)
         self.fpn_dims = self.fpn.out_dim
 
         ## Detection head
@@ -64,7 +63,7 @@ class YOLOv8(nn.Module):
                                             num_coords  = 4,
                                             num_levels  = self.num_levels,
                                             reg_max     = self.reg_max)
-
+        
     ## post-process
     def post_process(self, cls_preds, box_preds):
         """
@@ -89,11 +88,11 @@ class YOLOv8(nn.Module):
             # torch.sort is actually faster than .topk (at least on GPUs)
             predicted_prob, topk_idxs = scores_i.sort(descending=True)
             topk_scores = predicted_prob[:num_topk]
-            topk_idxs = topk_idxs[:num_topk]
+            topk_idxs   = topk_idxs[:num_topk]
 
             # filter out the proposals with low confidence score
             keep_idxs = topk_scores > self.conf_thresh
-            scores = topk_scores[keep_idxs]
+            scores    = topk_scores[keep_idxs]
             topk_idxs = topk_idxs[keep_idxs]
 
             anchor_idxs = torch.div(topk_idxs, self.num_classes, rounding_mode='floor')
@@ -169,7 +168,7 @@ class YOLOv8(nn.Module):
 
             # Neck network
             pyramid_feats[-1] = self.neck(pyramid_feats[-1])
-
+            
             # Feature pyramid
             pyramid_feats = self.fpn(pyramid_feats)
 
