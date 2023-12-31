@@ -1,52 +1,56 @@
+# --------------- Torch components ---------------
 import torch
 import torch.nn as nn
 
+# --------------- External components ---------------
+from utils.misc import multiclass_nms
+
+# --------------- Model components ---------------
 from .yolox_backbone import build_backbone
 from .yolox_pafpn import build_fpn
 from .yolox_head import build_head
 
-from utils.misc import multiclass_nms
 
-
+# YOLOx
 class YOLOX(nn.Module):
-    def __init__(self, 
+    def __init__(self,
                  cfg,
-                 device, 
-                 num_classes = 20, 
+                 device,
+                 num_classes = 20,
                  conf_thresh = 0.05,
-                 nms_thresh = 0.6,
-                 trainable = False, 
-                 topk = 1000,
-                 deploy = False,
+                 nms_thresh  = 0.6,
+                 trainable   = False,
+                 topk        = 1000,
+                 deploy      = False,
                  nms_class_agnostic = False):
         super(YOLOX, self).__init__()
-        # ---------------------- Basic Parameters ----------------------
-        self.cfg = cfg
-        self.device = device
-        self.stride = cfg['stride']
-        self.num_classes = num_classes
-        self.trainable = trainable
-        self.conf_thresh = conf_thresh
-        self.nms_thresh = nms_thresh
-        self.topk = topk
-        self.deploy = deploy
+        # ------------------------- Basic parameters  ---------------------------
+        self.cfg                = cfg                  # Model configuration file
+        self.device             = device               # cuda or cpu
+        self.num_classes        = num_classes          # number of classes
+        self.trainable          = trainable            # training mark
+        self.conf_thresh        = conf_thresh          # score threshold
+        self.nms_thresh         = nms_thresh           # NMS threshold
+        self.topk               = topk                 # topk
+        self.stride             = cfg['stride']
+        self.deploy             = deploy
         self.nms_class_agnostic = nms_class_agnostic
-                
-        # ------------------- Network Structure -------------------
-        ## 主干网络
+        
+        # ----------------------- Model network structure -----------------------
+        ## Backbone network
         self.backbone, feats_dim = build_backbone(cfg)
         
-        ## 特征金字塔
+        ## Feature Pyramid
         self.fpn = build_fpn(cfg=cfg, in_dims=feats_dim, out_dim=round(256*cfg['width']))
         self.head_dim = self.fpn.out_dim
 
-        ## 检测头
+        ## Detection head
         self.non_shared_heads = nn.ModuleList(
             [build_head(cfg, head_dim, head_dim, num_classes) 
             for head_dim in self.head_dim
             ])
 
-        ## 预测层
+        ## Prediction layer
         self.obj_preds = nn.ModuleList(
                             [nn.Conv2d(head.reg_out_dim, 1, kernel_size=1) 
                                 for head in self.non_shared_heads
@@ -59,7 +63,7 @@ class YOLOX(nn.Module):
                             [nn.Conv2d(head.reg_out_dim, 4, kernel_size=1) 
                                 for head in self.non_shared_heads
                               ])                 
-
+    
 
     # ---------------------- Basic Functions ----------------------
     ## generate anchor points
@@ -67,8 +71,9 @@ class YOLOX(nn.Module):
         """
             fmp_size: (List) [H, W]
         """
-        # generate grid cells
         fmp_h, fmp_w = fmp_size
+
+        # generate grid cells
         anchor_y, anchor_x = torch.meshgrid([torch.arange(fmp_h), torch.arange(fmp_w)])
         # [H, W, 2] -> [HW, 2]
         anchor_xy = torch.stack([anchor_x, anchor_y], dim=-1).float().view(-1, 2)
@@ -101,11 +106,11 @@ class YOLOX(nn.Module):
             # torch.sort is actually faster than .topk (at least on GPUs)
             predicted_prob, topk_idxs = scores_i.sort(descending=True)
             topk_scores = predicted_prob[:num_topk]
-            topk_idxs = topk_idxs[:num_topk]
+            topk_idxs   = topk_idxs[:num_topk]
 
             # filter out the proposals with low confidence score
             keep_idxs = topk_scores > self.conf_thresh
-            scores = topk_scores[keep_idxs]
+            scores    = topk_scores[keep_idxs]
             topk_idxs = topk_idxs[keep_idxs]
 
             anchor_idxs = torch.div(topk_idxs, self.num_classes, rounding_mode='floor')
@@ -136,17 +141,17 @@ class YOLOX(nn.Module):
     # ---------------------- Main Process for Inference ----------------------
     @torch.no_grad()
     def inference_single_image(self, x):
-        # 主干网络
+        # Backbone network
         pyramid_feats = self.backbone(x)
 
-        # 特征金字塔
+        # Feature pyramid
         pyramid_feats = self.fpn(pyramid_feats)
 
-        # 检测头
+        # Detection head
+        all_anchors   = []
         all_obj_preds = []
         all_cls_preds = []
         all_box_preds = []
-        all_anchors = []
         for level, (feat, head) in enumerate(zip(pyramid_feats, self.non_shared_heads)):
             cls_feat, reg_feat = head(feat)
 
@@ -157,7 +162,7 @@ class YOLOX(nn.Module):
 
             # anchors: [M, 2]
             fmp_size = cls_pred.shape[-2:]
-            anchors = self.generate_anchors(level, fmp_size)
+            anchors  = self.generate_anchors(level, fmp_size)
 
             # [1, C, H, W] -> [H, W, C] -> [M, C]
             obj_pred = obj_pred[0].permute(1, 2, 0).contiguous().view(-1, 1)
@@ -165,11 +170,11 @@ class YOLOX(nn.Module):
             reg_pred = reg_pred[0].permute(1, 2, 0).contiguous().view(-1, 4)
 
             # decode bbox
-            ctr_pred = reg_pred[..., :2] * self.stride[level] + anchors[..., :2]
-            wh_pred = torch.exp(reg_pred[..., 2:]) * self.stride[level]
+            ctr_pred  = reg_pred[..., :2] * self.stride[level] + anchors[..., :2]
+            wh_pred   = torch.exp(reg_pred[..., 2:]) * self.stride[level]
             pred_x1y1 = ctr_pred - wh_pred * 0.5
             pred_x2y2 = ctr_pred + wh_pred * 0.5
-            box_pred = torch.cat([pred_x1y1, pred_x2y2], dim=-1)
+            box_pred  = torch.cat([pred_x1y1, pred_x2y2], dim=-1)
 
             all_obj_preds.append(obj_pred)
             all_cls_preds.append(cls_pred)
@@ -180,17 +185,17 @@ class YOLOX(nn.Module):
             obj_preds = torch.cat(all_obj_preds, dim=0)
             cls_preds = torch.cat(all_cls_preds, dim=0)
             box_preds = torch.cat(all_box_preds, dim=0)
-            scores = torch.sqrt(obj_preds.sigmoid() * cls_preds.sigmoid())
-            bboxes = box_preds
+            scores    = torch.sqrt(obj_preds.sigmoid() * cls_preds.sigmoid())
+            bboxes    = box_preds
             # [n_anchors_all, 4 + C]
             outputs = torch.cat([bboxes, scores], dim=-1)
 
             return outputs
         else:
-            # post process
+            # Post-processing
             bboxes, scores, labels = self.post_process(
                 all_obj_preds, all_cls_preds, all_box_preds)
-        
+            
             return bboxes, scores, labels
 
 
@@ -199,15 +204,15 @@ class YOLOX(nn.Module):
         if not self.trainable:
             return self.inference_single_image(x)
         else:
-            # 主干网络
+            # Backbone network
             pyramid_feats = self.backbone(x)
 
-            # 特征金字塔
+            # Feature pyramid
             pyramid_feats = self.fpn(pyramid_feats)
 
-            # 检测头
-            all_anchors = []
-            all_strides = []
+            # Detection head
+            all_anchors   = []
+            all_strides   = []
             all_obj_preds = []
             all_cls_preds = []
             all_box_preds = []
@@ -224,18 +229,18 @@ class YOLOX(nn.Module):
                 fmp_size = [H, W]
                 # generate anchor boxes: [M, 4]
                 anchors = self.generate_anchors(level, fmp_size)
-
+                
                 # stride tensor: [M, 1]
                 stride_tensor = torch.ones_like(anchors[..., :1]) * self.stride[level]
-
+                
                 # [B, C, H, W] -> [B, H, W, C] -> [B, M, C]
                 obj_pred = obj_pred.permute(0, 2, 3, 1).contiguous().view(B, -1, 1)
                 cls_pred = cls_pred.permute(0, 2, 3, 1).contiguous().view(B, -1, self.num_classes)
                 reg_pred = reg_pred.permute(0, 2, 3, 1).contiguous().view(B, -1, 4)
 
                 # decode bbox
-                ctr_pred = reg_pred[..., :2] * self.stride[level] + anchors[..., :2]
-                wh_pred = torch.exp(reg_pred[..., 2:]) * self.stride[level]
+                ctr_pred  = reg_pred[..., :2] * self.stride[level] + anchors[..., :2]
+                wh_pred   = torch.exp(reg_pred[..., 2:]) * self.stride[level]
                 pred_x1y1 = ctr_pred - wh_pred * 0.5
                 pred_x2y2 = ctr_pred + wh_pred * 0.5
                 box_pred = torch.cat([pred_x1y1, pred_x2y2], dim=-1)
@@ -247,7 +252,7 @@ class YOLOX(nn.Module):
                 all_anchors.append(anchors)
                 all_strides.append(stride_tensor)
             
-            # output dict
+            # Network output
             outputs = {"pred_obj": all_obj_preds,        # List(Tensor) [B, M, 1]
                        "pred_cls": all_cls_preds,        # List(Tensor) [B, M, C]
                        "pred_box": all_box_preds,        # List(Tensor) [B, M, 4]
@@ -256,5 +261,4 @@ class YOLOX(nn.Module):
                        "strides": self.stride,           # List(Int) [8, 16, 32]
                        "stride_tensors": all_strides     # List(Tensor) [M, 1]
                        }
-
-            return outputs 
+            return outputs
