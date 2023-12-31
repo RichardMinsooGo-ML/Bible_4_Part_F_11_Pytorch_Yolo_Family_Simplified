@@ -2,15 +2,15 @@
 import torch
 import torch.nn as nn
 
+# --------------- External components ---------------
+from utils.misc import multiclass_nms
+
 # --------------- Model components ---------------
 from .yolov8_backbone import build_backbone
 from .yolov8_neck import build_neck
 from .yolov8_pafpn import build_fpn
 from .yolov8_head import build_det_head
 from .yolov8_pred import build_pred_layer
-
-# --------------- External components ---------------
-from utils.misc import multiclass_nms
 
 
 # YOLOv8
@@ -26,37 +26,37 @@ class YOLOv8(nn.Module):
                  deploy      = False,
                  nms_class_agnostic = False):
         super(YOLOv8, self).__init__()
-        # ---------------------- Basic Parameters ----------------------
-        self.cfg = cfg
-        self.device = device
-        self.strides = cfg['stride']
-        self.reg_max = cfg['reg_max']
-        self.num_classes = num_classes
-        self.trainable = trainable
-        self.conf_thresh = conf_thresh
-        self.nms_thresh = nms_thresh
-        self.num_levels = len(self.strides)
-        self.num_classes = num_classes
-        self.topk = topk
-        self.deploy = deploy
+        # ------------------------- Basic parameters  ---------------------------
+        self.cfg                = cfg                  # Model configuration file
+        self.device             = device               # cuda or cpu
+        self.strides            = cfg['stride']
+        self.reg_max            = cfg['reg_max']
+        self.num_classes        = num_classes          # number of classes
+        self.trainable          = trainable            # training mark
+        self.conf_thresh        = conf_thresh          # score threshold
+        self.nms_thresh         = nms_thresh           # NMS threshold
+        self.num_levels         = len(self.strides)
+        self.num_classes        = num_classes
+        self.topk               = topk                 # topk
+        self.deploy             = deploy
         self.nms_class_agnostic = nms_class_agnostic
         
-        # ---------------------- Network Parameters ----------------------
-        ## ----------- Backbone -----------
+        # ----------------------- Model network structure -----------------------
+        ## Backbone network
         self.backbone, feat_dims = build_backbone(cfg)
 
-        ## ----------- Neck: SPP -----------
+        ## Neck network: SPP module
         self.neck = build_neck(cfg, feat_dims[-1], feat_dims[-1])
         feat_dims[-1] = self.neck.out_dim
         
-        ## ----------- Neck: FPN -----------
+        ## Neck Network: Feature Pyramid
         self.fpn = build_fpn(cfg, feat_dims)
         self.fpn_dims = self.fpn.out_dim
 
-        ## ----------- Heads -----------
+        ## Detection head
         self.det_heads = build_det_head(cfg, self.fpn_dims, self.num_levels, num_classes, self.reg_max)
 
-        ## ----------- Preds -----------
+        ## Prediction layer
         self.pred_layers = build_pred_layer(cls_dim     = self.det_heads.cls_head_dim,
                                             reg_dim     = self.det_heads.reg_head_dim,
                                             strides     = self.strides,
@@ -117,22 +117,23 @@ class YOLOv8(nn.Module):
         # nms
         scores, labels, bboxes = multiclass_nms(
             scores, labels, bboxes, self.nms_thresh, self.num_classes, self.nms_class_agnostic)
-        
+
         return bboxes, scores, labels
+
 
     # ---------------------- Main Process for Inference ----------------------
     @torch.no_grad()
     def inference_single_image(self, x):
-        # ---------------- Backbone ----------------
+        # Backbone network
         pyramid_feats = self.backbone(x)
 
-        # ---------------- Neck: SPP ----------------
+        # Neck network
         pyramid_feats[-1] = self.neck(pyramid_feats[-1])
 
-        # ---------------- Neck: PaFPN ----------------
+        # Feature pyramid
         pyramid_feats = self.fpn(pyramid_feats)
 
-        # ---------------- Heads ----------------
+        # Detection head
         cls_feats, reg_feats = self.det_heads(pyramid_feats)
 
         # ---------------- Preds ----------------
@@ -144,35 +145,38 @@ class YOLOv8(nn.Module):
         if self.deploy:
             cls_preds = torch.cat(all_cls_preds, dim=1)[0]
             box_preds = torch.cat(all_box_preds, dim=1)[0]
-            scores = cls_preds.sigmoid()
-            bboxes = box_preds
+            scores    = cls_preds.sigmoid()
+            bboxes    = box_preds
             # [n_anchors_all, 4 + C]
             outputs = torch.cat([bboxes, scores], dim=-1)
 
             return outputs
         else:
-            # post process
-            bboxes, scores, labels = self.post_process(all_cls_preds, all_box_preds)
-        
+            # Post-processing
+            bboxes, scores, labels = self.post_process(
+                all_cls_preds, all_box_preds)
+            
             return bboxes, scores, labels
 
+
+    # ---------------------- Main Process for Training ----------------------
     def forward(self, x):
         if not self.trainable:
             return self.inference_single_image(x)
         else:
-            # ---------------- Backbone ----------------
+            # Backbone network
             pyramid_feats = self.backbone(x)
 
-            # ---------------- Neck: SPP ----------------
+            # Neck network
             pyramid_feats[-1] = self.neck(pyramid_feats[-1])
 
-            # ---------------- Neck: PaFPN ----------------
+            # Feature pyramid
             pyramid_feats = self.fpn(pyramid_feats)
 
-            # ---------------- Heads ----------------
+            # Detection head
             cls_feats, reg_feats = self.det_heads(pyramid_feats)
 
             # ---------------- Preds ----------------
             outputs = self.pred_layers(cls_feats, reg_feats)
             
-            return outputs 
+            return outputs
