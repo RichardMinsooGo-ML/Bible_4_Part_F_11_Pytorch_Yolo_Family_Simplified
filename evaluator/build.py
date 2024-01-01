@@ -1,6 +1,11 @@
 import os
 
+from evaluator.coco_evaluator import COCOAPIEvaluator
 from evaluator.voc_evaluator import VOCAPIEvaluator
+from evaluator.crowdhuman_evaluator import CrowdHumanEvaluator
+from evaluator.ourdataset_evaluator import OurDatasetEvaluator
+
+
 
 def build_evluator(args, data_cfg, transform, device):
     # Basic parameters
@@ -13,4 +18,11 @@ def build_evluator(args, data_cfg, transform, device):
                                     device    = device,
                                     transform = transform
                                     )
+    ## COCO Evaluator
+    elif args.dataset == 'coco':
+        evaluator = COCOAPIEvaluator(data_dir  = data_dir,
+                                     device    = device,
+                                     transform = transform
+                                     )
+
     return evaluator
