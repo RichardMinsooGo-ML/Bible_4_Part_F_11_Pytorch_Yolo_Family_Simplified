@@ -1,3 +1,14 @@
+# Engilish
+*  **Theory** : [https://wikidocs.net/167699](https://wikidocs.net/226336) <br>
+*  **Implementation** : [https://wikidocs.net/167693](https://wikidocs.net/226337)
+
+# 한글
+*  **Theory** : [https://wikidocs.net/187967](https://wikidocs.net/218072) <br>
+*  **Implementation** : [https://wikidocs.net/167666](https://wikidocs.net/226041)
+
+This repository is folked from [https://github.com/yjh0410/RT-ODLab](https://github.com/yjh0410/RT-ODLab).
+At this repository, simplification and explanation and will be tested at Colab Environment.
+
 # YOLOv5:
 
 |   Model   | Batch | Scale | AP<sup>val<br>0.5:0.95 | AP<sup>val<br>0.5 | FLOPs<br><sup>(G) | Params<br><sup>(M) | Weight |
@@ -31,44 +42,208 @@ On the other hand, we are trying to use **AdamW** and larger batch size to train
 - For learning rate scheduler, we use linear decay scheduler.
 - We use decoupled head in our reproduced YOLOv5, which is different from the official YOLOv5'head.
 
+## Step 1. Clone from Github and install library
 
-## Train YOLOv5
-### Single GPU
-Taking training YOLOv5-S on COCO as the example,
+Git clone to root directory. 
+
 ```Shell
-python train.py --cuda -d coco --root path/to/coco -m yolov5_s -bs 16 -size 640 --wp_epoch 3 --max_epoch 300 --eval_epoch 10 --no_aug_epoch 20 --ema --fp16 --multi_scale 
+# Clone from Github Repository
+! git init .
+! git remote add origin https://github.com/RichardMinsooGo-ML/Bible_4_Part_F_05_Pytorch_Yolov5.git
+# ! git pull origin master
+! git pull origin main
 ```
 
-### Multi GPU
-Taking training YOLOv5 on COCO as the example,
-```Shell
-python -m torch.distributed.run --nproc_per_node=8 train.py --cuda -dist -d coco --root /data/datasets/ -m yolov5_s -bs 128 -size 640 --wp_epoch 3 --max_epoch 300  --eval_epoch 10 --no_aug_epoch 20 --ema --fp16 --sybn --multi_scale --save_folder weights/ 
+A tool to count the FLOPs of PyTorch model.
+
+```
+from IPython.display import clear_output
+clear_output()
 ```
 
-## Test YOLOv5
-Taking testing YOLOv5 on COCO-val as the example,
 ```Shell
-python test.py --cuda -d coco --root path/to/coco -m yolov5_s --weight path/to/yolov5.pth -size 640 -vt 0.4 --show 
+! pip install thop
 ```
 
-## Evaluate YOLOv5
-Taking evaluating YOLOv5 on COCO-val as the example,
+## Step x. Download pretrained weight
+
 ```Shell
-python eval.py --cuda -d coco-val --root path/to/coco -m yolov5_s --weight path/to/yolov5.pth 
+# yolov5 pretrained weight is not working at Colab
+
+# ! wget https://github.com/yjh0410/RT-ODLab/releases/download/yolo_tutorial_ckpt/yolov5_n_coco.pth
+# ! wget https://github.com/yjh0410/RT-ODLab/releases/download/yolo_tutorial_ckpt/yolov5_s_coco.pth
+# ! wget https://github.com/yjh0410/RT-ODLab/releases/download/yolo_tutorial_ckpt/yolov5_m_coco.pth
+# ! wget https://github.com/yjh0410/RT-ODLab/releases/download/yolo_tutorial_ckpt/yolov5_l_coco.pth
 ```
 
 ## Demo
 ### Detect with Image
 ```Shell
-python demo.py --mode image --path_to_img path/to/image_dirs/ --cuda -m yolov5_s --weight path/to/weight -size 640 -vt 0.4 --show
+# Detect with Image
+
+# ! python demo.py --mode image \
+#                  --path_to_img /content/dataset/demo/images/ \
+#                  --cuda \
+#                  -m yolov5_l \
+#                  --weight /content/yolov5_l_coco.pth \
+#                  -size 640 \
+#                  -vt 0.4
+                 # --show
+
+# See /content/det_results/demos/image
 ```
 
 ### Detect with Video
 ```Shell
-python demo.py --mode video --path_to_vid path/to/video --cuda -m yolov5_s --weight path/to/weight -size 640 -vt 0.4 --show --gif
+# Detect with Video
+
+# ! python demo.py --mode video \
+#                  --path_to_vid /content/dataset/demo/videos/street.mp4 \
+#                  --cuda -m yolov5_m \
+#                  --weight /content/yolov5_m_coco.pth \
+#                  -size 640 \
+#                  -vt 0.4 \
+#                  --gif
+                 # --show
+
+# See /content/det_results/demos/video Download and check the results
 ```
 
 ### Detect with Camera
 ```Shell
-python demo.py --mode camera --cuda -m yolov5_s --weight path/to/weight -size 640 -vt 0.4 --show --gif
+# Detect with Camera
+# it don't work at Colab. Use laptop
+
+# ! python demo.py --mode camera \
+#                  --cuda \
+#                  -m yolov5_s \
+#                  --weight /content/yolov5_s_coco.pth \
+#                  -size 640 \
+#                  -vt 0.4 \
+#                  --gif
+                 # --show
 ```
+
+## Download COCO Dataset
+
+```Shell
+# COCO dataset download and extract
+
+# ! wget http://images.cocodataset.org/zips/train2017.zip
+! wget http://images.cocodataset.org/zips/val2017.zip
+! wget http://images.cocodataset.org/zips/test2017.zip
+# ! wget http://images.cocodataset.org/zips/unlabeled2017.zip
+
+# ! unzip train2017.zip  -d dataset/COCO
+! unzip val2017.zip  -d dataset/COCO
+! unzip test2017.zip  -d dataset/COCO
+
+# ! unzip unlabeled2017.zip -d dataset/COCO
+
+# ! rm train2017.zip
+# ! rm val2017.zip
+# ! rm test2017.zip
+# ! rm unlabeled2017.zip
+
+! wget http://images.cocodataset.org/annotations/annotations_trainval2017.zip
+# wget http://images.cocodataset.org/annotations/stuff_annotations_trainval2017.zip
+# wget http://images.cocodataset.org/annotations/image_info_test2017.zip
+# wget http://images.cocodataset.org/annotations/image_info_unlabeled2017.zip
+
+! unzip annotations_trainval2017.zip -d dataset/COCO
+# ! unzip stuff_annotations_trainval2017.zip
+# ! unzip image_info_test2017.zip
+# ! unzip image_info_unlabeled2017.zip
+
+# ! rm annotations_trainval2017.zip
+# ! rm stuff_annotations_trainval2017.zip
+# ! rm image_info_test2017.zip
+# ! rm image_info_unlabeled2017.zip
+
+clear_output()
+```
+
+
+## Test YOLOv5
+Taking testing YOLOv5 on COCO-val as the example,
+```Shell
+# Test YOLOv5
+
+# ! python test.py --cuda \
+#                  -d coco \
+#                  --data_path /content/dataset  \
+#                  -m yolov5_m \
+#                  --weight /content/yolov5_m_coco.pth \
+#                  -size 640 \
+#                  -vt 0.4
+                 # --show
+# See /content/det_results/coco/yolov5
+```
+
+## Evaluate YOLOv5
+Taking evaluating YOLOv5 on COCO-val as the example,
+```Shell
+# Evaluate YOLOv5
+
+# ! python eval.py --cuda \
+#                  -d coco-val \
+#                  --data_path /content/dataset \
+#                  --weight /content/yolov5_m_coco.pth \
+#                  -m yolov5_m
+
+```
+
+# Training test
+## Download VOC Dataset
+
+```Shell
+# VOC 2012 Dataset Download and extract
+
+! wget http://host.robots.ox.ac.uk/pascal/VOC/voc2012/VOCtrainval_11-May-2012.tar
+!tar -xvf "/content/VOCtrainval_11-May-2012.tar" -C "/content/dataset"
+clear_output()
+
+# VOC 2007 Dataset Download and extract
+
+! wget http://host.robots.ox.ac.uk/pascal/VOC/voc2007/VOCtrainval_06-Nov-2007.tar
+! wget http://host.robots.ox.ac.uk/pascal/VOC/voc2007/VOCtest_06-Nov-2007.tar
+!tar -xvf "/content/VOCtrainval_06-Nov-2007.tar" -C "/content/dataset"
+!tar -xvf "/content/VOCtest_06-Nov-2007.tar" -C "/content/dataset"
+clear_output()
+```
+
+
+## Train YOLOv5
+### Single GPU
+Taking training YOLOv5-S on VOC as the example,
+```Shell
+! python train.py --cuda \
+                  -d voc \
+                  --data_path /content/dataset \
+                  -m yolov5_n \
+                  -bs 32 \
+                  --max_epoch 20 \
+                  --wp_epoch 1 \
+                  --eval_epoch 10 \
+                  --fp16 \
+                  --ema \
+                  --multi_scale
+```
+
+### Multi GPU
+Taking training YOLOv5 on VOC as the example,
+```Shell
+# yolov5_t have some bug
+# ! python train.py --cuda \
+#                   -d voc \
+#                   --data_path /content/dataset \
+#                   -m yolov5_t \
+#                   -bs 32 \
+#                   --max_epoch 3 \
+#                   --wp_epoch 1 \
+#                   --eval_epoch 3 \
+#                   --fp16 \
+#                   --ema \
+#                   --multi_scale
+```
+
