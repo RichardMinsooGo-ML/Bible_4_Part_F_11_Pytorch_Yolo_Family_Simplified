@@ -220,6 +220,7 @@ class YOLOv7(nn.Module):
             pyramid_feats = self.fpn(pyramid_feats)
 
             # Detection head
+            all_anchors   = []
             all_strides   = []
             all_obj_preds = []
             all_cls_preds = []
