@@ -1,3 +1,14 @@
+# Engilish
+*  **Theory** : [https://wikidocs.net/167699](https://wikidocs.net/226339) <br>
+*  **Implementation** : [https://wikidocs.net/167693](https://wikidocs.net/226340)
+
+# 한글
+*  **Theory** : [https://wikidocs.net/187967](https://wikidocs.net/225897) <br>
+*  **Implementation** : [https://wikidocs.net/167666](https://wikidocs.net/226038)
+
+This repository is folked from [https://github.com/yjh0410/RT-ODLab](https://github.com/yjh0410/RT-ODLab).
+At this repository, simplification and explanation and will be tested at Colab Environment.
+
 # YOLOv7:
 
 |    Model    |   Backbone    | Batch | Scale | AP<sup>val<br>0.5:0.95 | AP<sup>val<br>0.5 | FLOPs<br><sup>(G) | Params<br><sup>(M) | Weight |
@@ -14,43 +25,237 @@
 - I think YOLOv7 uses too many training tricks, such as `anchor box`, `AuxiliaryHead`, `RepConv`, `Mosaic9x` and so on, making the picture of YOLO too complicated, which is against the development concept of the YOLO series. Otherwise, why don't we use the DETR series? It's nothing more than doing some acceleration optimization on DETR. Therefore, I was faithful to my own technical aesthetics and realized a cleaner and simpler YOLOv7, but without the blessing of so many tricks, I did not reproduce all the performance, which is a pity.
 - I have no more GPUs to train my `YOLOv7-X`.
 
-## Train YOLOv7
-### Single GPU
-Taking training YOLOv7-Tiny on COCO as the example,
+## Step 1. Clone from Github and install library
+
+Git clone to root directory. 
+
 ```Shell
-python train.py --cuda -d coco --root path/to/coco -m yolov7_tiny -bs 16 -size 640 --wp_epoch 3 --max_epoch 300 --eval_epoch 10 --no_aug_epoch 20 --ema --fp16 --multi_scale 
+# Clone from Github Repository
+! git init .
+! git remote add origin https://github.com/RichardMinsooGo-ML/Bible_4_Part_F_07_Pytorch_Yolov7.git
+# ! git pull origin master
+! git pull origin main
 ```
 
-### Multi GPU
-Taking training YOLOv7-Tiny on COCO as the example,
-```Shell
-python -m torch.distributed.run --nproc_per_node=8 train.py --cuda -dist -d coco --root /data/datasets/ -m yolov7_tiny -bs 128 -size 640 --wp_epoch 3 --max_epoch 300  --eval_epoch 10 --no_aug_epoch 20 --ema --fp16 --sybn --multi_scale --save_folder weights/ 
+A tool to count the FLOPs of PyTorch model.
+
+```
+from IPython.display import clear_output
+clear_output()
 ```
 
-## Test YOLOv7
-Taking testing YOLOv7-Tiny on COCO-val as the example,
 ```Shell
-python test.py --cuda -d coco --root path/to/coco -m yolov7_tiny --weight path/to/yolov7_tiny.pth -size 640 -vt 0.4 --show 
+! pip install thop
 ```
 
-## Evaluate YOLOv7
-Taking evaluating YOLOv7-Tiny on COCO-val as the example,
+## Step x. Download pretrained weight
+
 ```Shell
-python eval.py --cuda -d coco-val --root path/to/coco -m yolov7_tiny --weight path/to/yolov7_tiny.pth 
+! wget https://github.com/yjh0410/RT-ODLab/releases/download/yolo_tutorial_ckpt/yolov7_tiny_coco.pth
+! wget https://github.com/yjh0410/RT-ODLab/releases/download/yolo_tutorial_ckpt/yolov7_coco.pth
 ```
 
 ## Demo
 ### Detect with Image
 ```Shell
-python demo.py --mode image --path_to_img path/to/image_dirs/ --cuda -m yolov7_tiny --weight path/to/weight -size 640 -vt 0.4 --show
+# Detect with Image
+
+! python demo.py --mode image \
+                 --path_to_img /content/dataset/demo/images/ \
+                 --cuda \
+                 -m yolov7_tiny \
+                 --weight /content/yolov7_tiny_coco.pth \
+                 -size 640 \
+                 -vt 0.4
+                 # --show
+
+# See /content/det_results/demos/image
 ```
 
 ### Detect with Video
 ```Shell
-python demo.py --mode video --path_to_vid path/to/video --cuda -m yolov7_tiny --weight path/to/weight -size 640 -vt 0.4 --show --gif
+# Detect with Video
+
+! python demo.py --mode video \
+                 --path_to_vid /content/dataset/demo/videos/street.mp4 \
+                 --cuda \
+                 -m yolov7_tiny \
+                 --weight /content/yolov7_tiny_coco.pth \
+                 -size 640 \
+                 -vt 0.4 \
+                 --gif
+                 # --show
+
+# See /content/det_results/demos/video Download and check the results
 ```
 
 ### Detect with Camera
 ```Shell
-python demo.py --mode camera --cuda -m yolov7_tiny --weight path/to/weight -size 640 -vt 0.4 --show --gif
+# Detect with Camera
+# it don't work at Colab. Use laptop
+
+# ! python demo.py --mode camera \
+#                  --cuda \
+#                  -m yolov7_tiny \
+#                  --weight /content/yolov7_tiny.pth \
+#                  -size 640 \
+#                  -vt 0.4 \
+#                  --gif
+                 # --show
 ```
+
+## Download COCO Dataset
+
+```Shell
+# COCO dataset download and extract
+
+# ! wget http://images.cocodataset.org/zips/train2017.zip
+! wget http://images.cocodataset.org/zips/val2017.zip
+! wget http://images.cocodataset.org/zips/test2017.zip
+# ! wget http://images.cocodataset.org/zips/unlabeled2017.zip
+
+# ! unzip train2017.zip  -d dataset/COCO
+! unzip val2017.zip  -d dataset/COCO
+! unzip test2017.zip  -d dataset/COCO
+
+# ! unzip unlabeled2017.zip -d dataset/COCO
+
+# ! rm train2017.zip
+# ! rm val2017.zip
+# ! rm test2017.zip
+# ! rm unlabeled2017.zip
+
+! wget http://images.cocodataset.org/annotations/annotations_trainval2017.zip
+# wget http://images.cocodataset.org/annotations/stuff_annotations_trainval2017.zip
+# wget http://images.cocodataset.org/annotations/image_info_test2017.zip
+# wget http://images.cocodataset.org/annotations/image_info_unlabeled2017.zip
+
+! unzip annotations_trainval2017.zip -d dataset/COCO
+# ! unzip stuff_annotations_trainval2017.zip
+# ! unzip image_info_test2017.zip
+# ! unzip image_info_unlabeled2017.zip
+
+# ! rm annotations_trainval2017.zip
+# ! rm stuff_annotations_trainval2017.zip
+# ! rm image_info_test2017.zip
+# ! rm image_info_unlabeled2017.zip
+
+clear_output()
+```
+
+## Test YOLOv7
+Taking testing YOLOv7-Tiny on COCO-val as the example,
+```Shell
+# Test YOLOv7
+! python test.py --cuda \
+                 -d coco \
+                 --data_path /content/dataset \
+                 -m yolov7_tiny \
+                 --weight /content/yolov7_tiny_coco.pth \
+                 -size 640 \
+                 -vt 0.4
+                 # --show
+# See /content/det_results/coco/yolov7
+```
+
+## Evaluate YOLOv7
+Taking evaluating YOLOv7-Tiny on COCO-val as the example,
+```Shell
+# Evaluate YOLOv7
+
+! python eval.py --cuda \
+                 -d coco-val \
+                 --data_path /content/dataset \
+                 --weight /content/yolov7_tiny_coco.pth \
+                 -m yolov7_tiny
+```
+
+# Training test
+## Download VOC Dataset
+
+```Shell
+# VOC 2012 Dataset Download and extract
+
+! wget http://host.robots.ox.ac.uk/pascal/VOC/voc2012/VOCtrainval_11-May-2012.tar
+!tar -xvf "/content/VOCtrainval_11-May-2012.tar" -C "/content/dataset"
+clear_output()
+
+# VOC 2007 Dataset Download and extract
+
+! wget http://host.robots.ox.ac.uk/pascal/VOC/voc2007/VOCtrainval_06-Nov-2007.tar
+! wget http://host.robots.ox.ac.uk/pascal/VOC/voc2007/VOCtest_06-Nov-2007.tar
+!tar -xvf "/content/VOCtrainval_06-Nov-2007.tar" -C "/content/dataset"
+!tar -xvf "/content/VOCtest_06-Nov-2007.tar" -C "/content/dataset"
+clear_output()
+```
+
+
+## Train YOLOv7
+### Single GPU
+Taking training YOLOv7-Tiny on VOC as the example,
+```Shell
+! python train.py --cuda \
+                  -d voc \
+                  --data_path /content/dataset \
+                  -m yolov7_tiny \
+                  -bs 16 \
+                  --max_epoch 20 \
+                  --wp_epoch 1 \
+                  --eval_epoch 10 \
+                  --fp16 \
+                  --ema \
+                  --multi_scale
+```
+
+```Shell
+! python train.py --cuda \
+                  -d voc \
+                  --data_path /content/dataset \
+                  -m yolov7 \
+                  -bs 8 \
+                  --max_epoch 20 \
+                  --wp_epoch 1 \
+                  --eval_epoch 10 \
+                  --fp16 \
+                  --ema \
+                  --multi_scale
+```
+
+```Shell
+! python train.py --cuda \
+                  -d voc \
+                  --data_path /content/dataset \
+                  -m yolov7_x \
+                  -bs 4 \
+                  --max_epoch 5 \
+                  --wp_epoch 1 \
+                  --eval_epoch 5 \
+                  --fp16 \
+                  --ema \
+                  --multi_scale
+```
+
+### Multi GPU
+Taking training YOLOv7-Tiny on VOC as the example,
+```Shell
+# Cannot test at Colab-Pro + environment
+
+# ! python -m torch.distributed.run --nproc_per_node=8 train.py \
+#                                   --cuda \
+#                                   -dist \
+#                                   -d voc \
+#                                   --data_path /content/dataset \
+#                                   -m yolov7_tiny \
+#                                   -bs 128 \
+#                                   -size 640 \
+#                                   --wp_epoch 3 \
+#                                   --max_epoch 300 \
+#                                   --eval_epoch 10 \
+#                                   --no_aug_epoch 20 \
+#                                   --ema \
+#                                   --fp16 \
+#                                   --sybn \
+#                                   --multi_scale \
+#                                   --save_folder weights/
+```
+
