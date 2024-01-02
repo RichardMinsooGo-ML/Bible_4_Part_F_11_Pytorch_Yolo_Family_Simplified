@@ -124,6 +124,7 @@ clear_output()
                  # --show
 ```
 
+
 ## Download COCO Dataset
 
 ```Shell
@@ -225,6 +226,48 @@ Taking training YOLOv5-S on VOC as the example,
                   --max_epoch 20 \
                   --wp_epoch 1 \
                   --eval_epoch 10 \
+                  --fp16 \
+                  --ema \
+                  --multi_scale
+```
+
+```Shell
+! python train.py --cuda \
+                  -d voc \
+                  --data_path /content/dataset \
+                  -m yolov5_s \
+                  -bs 32 \
+                  --max_epoch 20 \
+                  --wp_epoch 1 \
+                  --eval_epoch 10 \
+                  --fp16 \
+                  --ema \
+                  --multi_scale
+```
+
+```Shell
+! python train.py --cuda \
+                  -d voc \
+                  --data_path /content/dataset \
+                  -m yolov5_m \
+                  -bs 16 \
+                  --max_epoch 5 \
+                  --wp_epoch 1 \
+                  --eval_epoch 5 \
+                  --fp16 \
+                  --ema \
+                  --multi_scale
+```
+
+```Shell
+! python train.py --cuda \
+                  -d voc \
+                  --data_path /content/dataset \
+                  -m yolov5_l \
+                  -bs 8 \
+                  --max_epoch 5 \
+                  --wp_epoch 1 \
+                  --eval_epoch 5 \
                   --fp16 \
                   --ema \
                   --multi_scale
