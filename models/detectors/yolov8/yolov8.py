@@ -34,12 +34,11 @@ class YOLOv8(nn.Module):
         self.trainable          = trainable            # training mark
         self.conf_thresh        = conf_thresh          # score threshold
         self.nms_thresh         = nms_thresh           # NMS threshold
-        self.num_levels         = len(self.strides)
         self.topk               = topk                 # topk
         self.strides            = cfg['stride']
+        self.num_levels         = len(self.strides)
         self.deploy             = deploy
         self.nms_class_agnostic = nms_class_agnostic
-        
         # ----------------------- Model network structure -----------------------
         ## Backbone network
         self.backbone, feats_dim = build_backbone(cfg)
